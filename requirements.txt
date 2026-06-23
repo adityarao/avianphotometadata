@@ -1,0 +1,4 @@
+# Avian Photo Metadata Assistant — Python dependencies
+customtkinter>=5.2.0
+Pillow>=10.0.0
+timezonefinder>=6.2.0
