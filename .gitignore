@@ -1,0 +1,21 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# App cache (user-local, not source)
+*.db
+*.sqlite
+
+# IDE
+.vscode/
+.idea/
+*.swp
