@@ -20,6 +20,10 @@ A macOS desktop app (+ CLI tool) for bird and wildlife photographers. Select a g
 
 ---
 
+## Screenshot
+<img width="1707" height="985" alt="avian-exif-ui" src="https://github.com/user-attachments/assets/06c2e921-9199-4d12-8cba-60c67b5e62f7" />
+
+
 ## Prerequisites
 
 ```bash
