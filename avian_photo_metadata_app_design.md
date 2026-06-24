@@ -1,7 +1,7 @@
 # Avian Photo Metadata Assistant — Design & Architecture
 
 > © Aditya Rao (aditya.r.rao@gmail.com)
-> Last updated: June 2026 (reflects M1–M6 as-built implementation)
+> Last updated: June 2026 (reflects M1–M7 as-built implementation)
 
 ---
 
@@ -304,12 +304,18 @@ Cache is checked first on every lookup. On a hit, the result is used immediately
 
 ```
 Avian Image Geo and Description Generator/
-├── run.sh                          # Launcher: venv setup, dep install, launch
+├── run.sh                          # Launcher: venv setup, dep install, CLI install, launch
 ├── requirements.txt                # customtkinter, Pillow, timezonefinder
+├── README.md
 ├── avian_photo_metadata_app_design.md  # This file
+├── .gitignore
+│
+├── bin/
+│   └── avianexif                   # Bash wrapper; symlinked to system PATH by run.sh
 │
 └── src/
     ├── main.py                     # Entry point; wires services → MainWindow
+    ├── cli.py                      # CLI entry point (avianexif command)
     │
     ├── models/
     │   └── photo_metadata.py       # PhotoMetadata dataclass + display helpers
@@ -563,7 +569,65 @@ Seen at dawn.
 
 ---
 
-## 18. Build Milestones (all completed)
+## 18. CLI Tool (`avianexif`)
+
+The app ships a companion CLI tool that shares the same services (location, weather, templates) as the GUI. It is useful for batch processing from the terminal or scripting into a photo workflow.
+
+### Invocation
+
+```bash
+avianexif -f photo.jpg
+avianexif -f *.jpg -t m
+avianexif -f '*.JPG' -t n --coords
+avianexif -f DSC001.jpg -t d -c "Seen at dawn in mixed forest"
+avianexif -f *.jpg -t d > all_notes.txt
+avianexif -f *.jpg --no-weather --no-separator | pbcopy
+```
+
+### Flags
+
+| Flag | Values | Description |
+|---|---|---|
+| `-f` / `--file` | one or more paths or globs | Files to process. Glob expanded in **current directory only**, non-recursive |
+| `-t` / `--template` | `d` `m` `n` | Template: `d`=default, `m`=minimal, `n`=naturalist (default: `d`) |
+| `-c` / `--custom` | freeform text | Custom field notes appended to every description |
+| `--coords` | flag | Include exact GPS coordinates (hidden by default) |
+| `--no-weather` | flag | Skip Open-Meteo lookup — faster, fully offline |
+| `--no-separator` | flag | Suppress filename headers — useful for piping single files |
+
+### Output
+
+- Descriptions go to **stdout** (can be piped or redirected)
+- Warnings go to **stderr**
+- Exit code `0` = all files processed; `1` = one or more files failed
+
+Multi-file output:
+```
+────────────────────────────────────────────────────────────────
+  DSC001.jpg
+────────────────────────────────────────────────────────────────
+Photographed near ...
+
+────────────────────────────────────────────────────────────────
+  DSC002.jpg
+────────────────────────────────────────────────────────────────
+Photographed near ...
+```
+
+### Architecture
+
+- `src/cli.py` — argparse CLI; imports the same service layer as the GUI
+- `bin/avianexif` — bash wrapper that resolves symlinks → project root → `.venv/bin/python`, then `exec`s `src/cli.py "$@"`
+- `run.sh` step 5 — installs symlink to system PATH on every launch (auto-detects best location, see §20A)
+- GeoNames data must be downloaded first (run the GUI app once, or run `run.sh`)
+
+### Glob handling
+
+`resolve_files()` calls `glob.glob(pattern)` for each `-f` argument. Both shell-expanded (`-f *.jpg`) and quoted (`-f '*.jpg'`) forms work transparently. macOS case-insensitive filesystem means `*.jpg` also matches `.JPG`.
+
+---
+
+## 19. Build Milestones (all completed)
 
 ### M1 — EXIF Prototype ✅
 - File picker, ExifTool subprocess, PhotoMetadata dataclass, basic UI panels
@@ -592,9 +656,17 @@ Seen at dawn.
 - Attribution footer: Open-Meteo CC BY 4.0 · GeoNames CC BY 4.0
 - Default template enhanced: °F, condition, wind, sunrise/sunset, distance
 
+### M7 — CLI Tool (`avianexif`) ✅
+- `src/cli.py` — full argparse CLI sharing all GUI services
+- `bin/avianexif` — bash wrapper; follows symlinks to locate project root + `.venv`
+- `run.sh` step 5 — auto-installs symlink; detects Apple Silicon (`/opt/homebrew/bin`), Intel (`/usr/local/bin`), or fallback (`~/.local/bin`)
+- Multi-file glob support (`*.jpg`), non-recursive, current directory
+- Warnings to stderr, descriptions to stdout; pipeable and redirectable
+- Exit codes: 0 = all ok, 1 = any file failed
+
 ---
 
-## 19. Setup & Running
+## 20. Setup & Running
 
 ### Prerequisites
 ```bash
@@ -605,20 +677,59 @@ brew install python@3.12   # or 3.13; must have Tk support
 ### First run
 ```bash
 cd "Avian Image Geo and Description Generator"
+chmod +x run.sh bin/avianexif   # once, if needed
 ./run.sh
 ```
 
-`run.sh` will:
-1. Find a Python with working `_tkinter`
+`run.sh` steps:
+1. Find a Python with working `_tkinter` (probes Homebrew paths for 3.12 / 3.13)
 2. Create `.venv/` if absent
 3. Install `customtkinter`, `Pillow`, `timezonefinder`
-4. Launch the app
+4. Install `avianexif` symlink on system PATH (see §20A below)
+5. Launch the app
 
 On first launch, GeoNames place data is downloaded and imported in the background (~30–60 s).
 
 ---
 
-## 20. Phase 2 Ideas
+## 20A. CLI Installation (system PATH)
+
+`run.sh` auto-detects the right location in this order:
+
+| Mac type | Directory tried | Notes |
+|---|---|---|
+| Apple Silicon (M1/M2/M3/M4) | `/opt/homebrew/bin` | Homebrew default on AS; always exists if Homebrew is installed |
+| Intel Mac | `/usr/local/bin` | Homebrew default on Intel |
+| Fallback (no sudo needed) | `~/.local/bin` | Created automatically; requires PATH update |
+
+**If `run.sh` installs to `~/.local/bin`**, add it to your shell's PATH once:
+```bash
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+**Manual install (Apple Silicon)**:
+```bash
+sudo ln -sf "/Users/$USER/claude/Projects/Avian Image Geo and Description Generator/bin/avianexif" \
+    /opt/homebrew/bin/avianexif
+```
+
+**Manual install (Intel Mac)**:
+```bash
+# Create /usr/local/bin if it doesn't exist, then symlink:
+sudo mkdir -p /usr/local/bin
+sudo ln -sf "/Users/$USER/claude/Projects/Avian Image Geo and Description Generator/bin/avianexif" \
+    /usr/local/bin/avianexif
+```
+
+Verify:
+```bash
+avianexif --help
+```
+
+---
+
+## 21. Phase 2 Ideas
 
 - Batch photo import (queue processing)
 - Trip profiles (default timezone, custom text snippet per trip)
@@ -631,7 +742,7 @@ On first launch, GeoNames place data is downloaded and imported in the backgroun
 - Saved phrase snippets ("Seen during early morning birding…")
 - Drag-and-drop file input
 
-## 21. Phase 3 Ideas
+## 22. Phase 3 Ideas
 
 - Mac menu bar utility
 - Lightroom export plugin
@@ -643,7 +754,7 @@ On first launch, GeoNames place data is downloaded and imported in the backgroun
 
 ---
 
-## 22. Attributions
+## 23. Attributions
 
 | Data source | License | Usage |
 |---|---|---|

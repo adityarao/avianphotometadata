@@ -1,0 +1,26 @@
+#!/bin/bash
+# © Aditya Rao (aditya.r.rao@gmail.com)
+# avianexif — wrapper that activates the project venv and runs cli.py
+#
+# This script is symlinked to /usr/local/bin/avianexif by run.sh so that
+# the command is available from any directory.
+
+# Resolve the real location of this script (follows symlinks)
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+    DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+    SOURCE="$(readlink "$SOURCE")"
+    [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+
+VENV_PYTHON="$PROJECT_ROOT/.venv/bin/python"
+
+if [ ! -x "$VENV_PYTHON" ]; then
+    echo "[error] Virtual environment not found at $PROJECT_ROOT/.venv" >&2
+    echo "        Run ./run.sh once to set it up." >&2
+    exit 1
+fi
+
+exec "$VENV_PYTHON" "$PROJECT_ROOT/src/cli.py" "$@"

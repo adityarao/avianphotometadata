@@ -79,7 +79,44 @@ echo "📦  Checking Python dependencies..."
 "$VENV_PIP" install --quiet -r "$PROJECT_DIR/requirements.txt"
 echo "    Dependencies OK"
 
-# 5. Launch
+# 5. Install avianexif CLI on PATH (symlink to bin/avianexif)
+#    Priority: /opt/homebrew/bin (Apple Silicon) → /usr/local/bin (Intel Mac / manually created)
+#    Fallback: ~/.local/bin (no sudo needed, but user must add it to PATH)
+CLI_TARGET="$PROJECT_DIR/bin/avianexif"
+if [ -f "$CLI_TARGET" ]; then
+  chmod +x "$CLI_TARGET"
+  chmod +x "$PROJECT_DIR/src/cli.py"
+
+  # Determine best install location
+  if [ -d "/opt/homebrew/bin" ]; then
+    CLI_LINK="/opt/homebrew/bin/avianexif"
+  elif [ -d "/usr/local/bin" ]; then
+    CLI_LINK="/usr/local/bin/avianexif"
+  else
+    CLI_LINK=""
+  fi
+
+  if [ -n "$CLI_LINK" ]; then
+    ln -sf "$CLI_TARGET" "$CLI_LINK" 2>/dev/null \
+      && echo "🔗  avianexif CLI installed at $CLI_LINK" \
+      || {
+        echo "⚠️   Could not install to $CLI_LINK (permission denied)"
+        echo "     Fix with:  sudo ln -sf \"$CLI_TARGET\" $CLI_LINK"
+        CLI_LINK=""
+      }
+  fi
+
+  # Final fallback: ~/.local/bin (no sudo needed)
+  if [ -z "$CLI_LINK" ]; then
+    LOCAL_BIN="$HOME/.local/bin"
+    mkdir -p "$LOCAL_BIN"
+    ln -sf "$CLI_TARGET" "$LOCAL_BIN/avianexif" 2>/dev/null \
+      && echo "🔗  avianexif CLI installed at $LOCAL_BIN/avianexif" \
+      && echo "    ℹ️   Add to PATH if not already:  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc && source ~/.zshrc"
+  fi
+fi
+
+# 6. Launch
 echo ""
 echo "🦅  Launching Avian Photo Metadata Assistant..."
 echo ""
